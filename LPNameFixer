@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         LivePocket Name Fixer
+// @name         LP Name Fixer
 // @version      1.2
 // @description  汉字按首字拆分，拼音只保留单空格
 // @author       lala
