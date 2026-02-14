@@ -1,0 +1,117 @@
+// ==UserScript==
+// @name         LivePocket Name Fixer
+// @version      1.2
+// @description  汉字按首字拆分，拼音只保留单空格
+// @author       lala
+// @match        *://livepocket.jp/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    if (window._lp_name_fixed) return;
+    window._lp_name_fixed = true;
+
+    const R_INVIS = /[\u3164\u3000\u00A0\u200B-\u200D\u2060\uFEFF]/g;
+    const isLatin = (s) => /[a-z]/i.test(s || '');
+
+    function clean(str, mode = 'cjk') {
+        let s = (str || '').replace(R_INVIS, mode === 'latin' ? ' ' : '');
+        return mode === 'latin'
+            ? s.replace(/\s+/g, ' ').trim()
+            : s.replace(/\s+/g, '').trim();
+    }
+
+    function getTextContent(node, stopNode) {
+        let text = '', cur = node.nextSibling;
+        let targets = [];
+        while (cur && cur !== stopNode) {
+            if (cur.nodeType === 3) {
+                text += cur.textContent;
+                targets.push(cur);
+            }
+            cur = cur.nextSibling;
+        }
+        return { text, targets };
+    }
+
+    function fixTicket() {
+        const wrap = document.querySelector('.my-ticket-info__name');
+        if (!wrap) return;
+
+        const titles = wrap.querySelectorAll('.my-ticket-info__name-title');
+        if (titles.length < 2) return;
+
+        const surObj = getTextContent(titles[0], titles[1]);
+        const givObj = getTextContent(titles[1], null);
+        const rawFull = surObj.text + givObj.text;
+
+        if (!rawFull.trim()) return;
+
+        let newSur, newGiv;
+
+        if (isLatin(rawFull)) {
+            newSur = clean(surObj.text, 'latin');
+            newGiv = clean(givObj.text, 'latin');
+        } else {
+            const full = clean(rawFull);
+            if (full.length < 2) return;
+            newSur = full[0];
+            newGiv = full.slice(1);
+        }
+
+        const update = (obj, val) => {
+            if (!obj.targets.length) {
+                titles[obj === surObj ? 0 : 1].after(document.createTextNode(val));
+            } else {
+                if (obj.targets[0].textContent !== val) {
+                    obj.targets[0].textContent = val;
+                    for (let i = 1; i < obj.targets.length; i++) obj.targets[i].remove();
+                }
+            }
+        };
+
+        update(surObj, newSur);
+        update(givObj, newGiv);
+    }
+
+    function fixSingle(el) {
+        if (!el) return;
+        const txt = el.textContent || '';
+        if (isLatin(txt)) {
+            const val = clean(txt, 'latin');
+            if (el.textContent !== val) el.textContent = val;
+        } else {
+            const val = clean(txt);
+            if (val.length >= 2) {
+                const fmt = val[0] + ' ' + val.slice(1);
+                if (el.textContent !== fmt) el.textContent = fmt;
+            }
+        }
+    }
+
+    function run() {
+        fixTicket();
+
+        fixSingle(document.querySelector('.header-account__name span'));
+
+        document.querySelectorAll('.account-table__title').forEach(t => {
+            if (t.textContent.includes('氏名')) {
+                fixSingle(t.nextElementSibling);
+            }
+        });
+    }
+
+    run();
+
+    let timer;
+    const mo = new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(run, 200);
+    });
+
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('turbo:load', run);
+
+})();
